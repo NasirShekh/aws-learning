@@ -1,0 +1,28 @@
+service: csv-processor
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ap-south-1
+
+  environment:
+    TABLE_NAME: EmployeeData
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+          Resource:
+            - arn:aws:s3:::employee-upload-nasir-2026/*
+
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+          Resource:
+            - arn:aws:dynamodb:ap-south-1:*:table/EmployeeData
+
+functions:
+  processFile:
+    handler: handler.processFile
