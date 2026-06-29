@@ -8,6 +8,11 @@ import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as path from "path";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+
 
 export class CsvProcessorStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -48,6 +53,32 @@ export class CsvProcessorStack extends cdk.Stack {
         removalPolicy:
           cdk.RemovalPolicy.DESTROY,
       }
+    );
+
+    // SQS Queue
+    const csvProcessingQueue =
+      new sqs.Queue(
+        this,
+        "CsvProcessingQueue",
+        {
+          queueName:
+            "csv-processor-queue",
+
+          visibilityTimeout:
+            cdk.Duration.seconds(300),
+        }
+      );
+
+
+    //SNS Topic
+    const topic = new sns.Topic(this, "CsvProcessingTopic", {
+      topicName: "csv-processing-topic",
+    });
+
+    topic.addSubscription(
+      new subscriptions.EmailSubscription(
+        "demo@example.com"
+      )
     );
 
     // Lambda Role
@@ -96,6 +127,7 @@ export class CsvProcessorStack extends cdk.Stack {
           environment: {
             TABLE_NAME:
               employeeTable.tableName,
+              TOPIC_ARN: topic.topicArn,
           },
         }
       );
@@ -104,16 +136,32 @@ export class CsvProcessorStack extends cdk.Stack {
       csvProcessorLambda
     );
 
+    topic.grantPublish(csvProcessorLambda);
+
     csvBucket.grantRead(
       csvProcessorLambda
     );
 
-    // S3 Trigger
+    csvProcessingQueue.grantConsumeMessages(
+  csvProcessorLambda
+);
+
+    // S3 → SQS
     csvBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
 
-      new s3n.LambdaDestination(
-        csvProcessorLambda
+      new s3n.SqsDestination(
+        csvProcessingQueue
+      )
+    );
+
+    // SQS → Lambda
+    csvProcessorLambda.addEventSource(
+      new lambdaEventSources.SqsEventSource(
+        csvProcessingQueue,
+        {
+          batchSize: 1,
+        }
       )
     );
 
@@ -142,6 +190,15 @@ export class CsvProcessorStack extends cdk.Stack {
       {
         value:
           csvProcessorLambda.functionName,
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      "QueueName",
+      {
+        value:
+          csvProcessingQueue.queueName,
       }
     );
   }

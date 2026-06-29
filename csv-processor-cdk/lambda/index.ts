@@ -12,6 +12,11 @@ import {
   PutCommand,
 } from "@aws-sdk/lib-dynamodb";
 
+import {
+  SNSClient,
+  PublishCommand,
+} from "@aws-sdk/client-sns";
+
 interface CsvRecord {
   id: string;
   name: string;
@@ -25,6 +30,8 @@ const dynamoClient =
     new DynamoDBClient({})
   );
 
+const snsClient = new SNSClient({});
+
 export const processFile = async (
   event: any
 ): Promise<{
@@ -32,12 +39,20 @@ export const processFile = async (
   body: string;
 }> => {
   try {
+    const sqsMessage =
+      JSON.parse(
+        event.Records[0].body
+      );
+
+    const s3Event =
+      sqsMessage.Records[0];
+
     const bucketName =
-      event.Records[0].s3.bucket.name;
+      s3Event.s3.bucket.name;
 
     const objectKey =
       decodeURIComponent(
-        event.Records[0].s3.object.key
+        s3Event.s3.object.key
       );
 
     console.log(
@@ -62,12 +77,13 @@ export const processFile = async (
     }
 
     const rows =
-      fileContent.split("\n");
+      fileContent.split(/\r?\n/);
 
     // Skip CSV Header
     const dataRows =
       rows.slice(1);
 
+    let processedCount = 0;
     for (const row of dataRows) {
       if (!row.trim()) continue;
 
@@ -90,11 +106,28 @@ export const processFile = async (
           Item: item,
         })
       );
+      processedCount++;
 
       console.log(
         `Inserted record: ${item.id}`
       );
     }
+    await snsClient.send(
+      new PublishCommand({
+        TopicArn:
+          process.env.TOPIC_ARN!,
+
+        Subject:
+          "CSV Processing Completed",
+
+        Message:
+          `File: ${objectKey}
+
+Records Processed: ${processedCount}
+
+Status: SUCCESS`,
+      })
+    );
 
     return {
       statusCode: 200,
