@@ -1,13 +1,12 @@
-export const handler = async (
-  event: any
-) => {
+export const handler = async () => {
 
   console.log(
     "Generating Employee Code"
   );
 
-  event.generatedEmployeeCode =
-    `EMP-${Date.now()}`;
+  return {
+    employeeCode:
+      `EMP-${Date.now()}`
+  };
 
-  return event;
 };

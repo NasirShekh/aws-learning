@@ -144,6 +144,99 @@ export class EmployeeRegistrationWorkflowStack extends cdk.Stack {
         }
       );
 
+    /*Generate Badge Lambda*/
+
+    const generateBadge =
+      new NodejsFunction(
+        this,
+        "GenerateBadge",
+        {
+          functionName:
+            "generate-badge-lambda",
+
+          runtime:
+            lambda.Runtime.NODEJS_20_X,
+
+          entry: path.join(
+            __dirname,
+            "../lambda/generateBadge/index.ts"
+          ),
+
+          handler: "handler",
+
+          role: lambdaRole,
+        }
+      );
+
+
+    /*Notify HR Lambda*/
+
+    const notifyHR =
+      new NodejsFunction(
+        this,
+        "NotifyHR",
+        {
+          functionName:
+            "notify-hr-lambda",
+
+          runtime:
+            lambda.Runtime.NODEJS_20_X,
+
+          entry: path.join(
+            __dirname,
+            "../lambda/notifyHR/index.ts"
+          ),
+
+          handler: "handler",
+
+          role: lambdaRole,
+        }
+      );
+
+    // const mergeResults =
+    //   new NodejsFunction(
+    //     this,
+    //     "MergeResults",
+    //     {
+    //       functionName:
+    //         "merge-results-lambda",
+
+    //       runtime:
+    //         lambda.Runtime.NODEJS_20_X,
+
+    //       entry: path.join(
+    //         __dirname,
+    //         "../lambda/mergeResults/index.ts"
+    //       ),
+
+    //       handler: "handler",
+
+    //       role: lambdaRole,
+    //     }
+    //   );
+
+    // const notifyAdmin =
+    //   new NodejsFunction(
+    //     this,
+    //     "NotifyAdmin",
+    //     {
+    //       functionName:
+    //         "notify-admin-lambda",
+
+    //       runtime:
+    //         lambda.Runtime.NODEJS_20_X,
+
+    //       entry: path.join(
+    //         __dirname,
+    //         "../lambda/notifyAdmin/index.ts"
+    //       ),
+
+    //       handler: "handler",
+
+    //       role: lambdaRole,
+    //     }
+    //   );
+
 
     /*Send Welcome Email Lambda*/
 
@@ -184,7 +277,7 @@ export class EmployeeRegistrationWorkflowStack extends cdk.Stack {
         }
       );
 
-    /*ve Employee Task */
+    /*save Employee Task */
     const saveEmployeeTask =
       new tasks.LambdaInvoke(
         this,
@@ -198,7 +291,7 @@ export class EmployeeRegistrationWorkflowStack extends cdk.Stack {
         }
       );
 
-    /*nerate Employee ID Task */
+    /*generate Employee ID Task */
     const generateEmployeeIdTask =
       new tasks.LambdaInvoke(
         this,
@@ -206,11 +299,60 @@ export class EmployeeRegistrationWorkflowStack extends cdk.Stack {
         {
           lambdaFunction:
             generateEmployeeId,
-
-          outputPath:
-            "$.Payload",
+          outputPath: "$.Payload"
         }
       );
+
+    /*Generate Badge Task*/
+
+    const generateBadgeTask =
+      new tasks.LambdaInvoke(
+        this,
+        "Generate Badge Task",
+        {
+          lambdaFunction:
+            generateBadge,
+          outputPath: "$.Payload"
+        }
+      );
+
+    // const notifyAdminTask =
+    //   new tasks.LambdaInvoke(
+    //     this,
+    //     "Notify Admin Task",
+    //     {
+    //       lambdaFunction:
+    //         notifyAdmin,
+
+    //       outputPath:
+    //         "$.Payload",
+    //     }
+    //   );
+
+    /*Notify HR Task*/
+
+    const notifyHRTask =
+      new tasks.LambdaInvoke(
+        this,
+        "Notify HR Task",
+        {
+          lambdaFunction: notifyHR,
+          outputPath: "$.Payload"
+        }
+      );
+
+    // const mergeResultsTask =
+    //   new tasks.LambdaInvoke(
+    //     this,
+    //     "Merge Results Task",
+    //     {
+    //       lambdaFunction:
+    //         mergeResults,
+
+    //       outputPath:
+    //         "$.Payload",
+    //     }
+    //   );
 
     /*send Welcome Email Task */
     const sendWelcomeEmailTask =
@@ -225,6 +367,34 @@ export class EmployeeRegistrationWorkflowStack extends cdk.Stack {
             "$.Payload",
         }
       );
+
+
+
+    const parallelProcessing =
+      new sfn.Parallel(
+        this,
+        "Parallel Processing",
+        {
+          resultSelector: {
+            "employeeCode.$": "$[0].employeeCode",
+            "badgeId.$": "$[1].badgeId",
+            "notification.$": "$[2].notification"
+          }
+        }
+      )
+        .branch(generateEmployeeIdTask)
+        .branch(generateBadgeTask)
+        .branch(notifyHRTask);
+
+    // const waitState = new sfn.Wait(
+    //   this,
+    //   "Wait Before Sending Email",
+    //   {
+    //     time: sfn.WaitTime.duration(
+    //       cdk.Duration.seconds(10)
+    //     ),
+    //   }
+    // );
 
     const employeeRejected =
       new sfn.Fail(
@@ -261,7 +431,7 @@ export class EmployeeRegistrationWorkflowStack extends cdk.Stack {
               ),
 
               saveEmployeeTask
-                .next(generateEmployeeIdTask)
+                .next(parallelProcessing)
                 .next(sendWelcomeEmailTask)
 
             )
@@ -340,6 +510,24 @@ export class EmployeeRegistrationWorkflowStack extends cdk.Stack {
       {
         value:
           sendWelcomeEmail.functionName,
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      "GenerateBadgeLambda",
+      {
+        value:
+          generateBadge.functionName,
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      "NotifyHRLambda",
+      {
+        value:
+          notifyHR.functionName,
       }
     );
 
