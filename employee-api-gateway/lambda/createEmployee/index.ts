@@ -1,80 +1,47 @@
-import {
-  DynamoDBClient,
-} from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-} from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
-const client =
-  new DynamoDBClient({});
+const client = new DynamoDBClient({});
 
-const docClient =
-  DynamoDBDocumentClient.from(client);
+const docClient = DynamoDBDocumentClient.from(client);
 
-export const handler = async (
-  event: any
-) => {
-
+export const handler = async (event: any) => {
   try {
-
-    const body =
-      JSON.parse(event.body);
+    const body = JSON.parse(event.body);
 
     await docClient.send(
       new PutCommand({
-
-        TableName:
-          process.env.TABLE_NAME,
+        TableName: process.env.TABLE_NAME,
 
         Item: {
-          employeeId:
-            body.employeeId,
+          employeeId: body.employeeId,
 
-          name:
-            body.name,
+          name: body.name,
 
-          department:
-            body.department,
+          department: body.department,
 
-          salary:
-            body.salary,
-        }
-
-      })
+          salary: body.salary,
+        },
+      }),
     );
 
     return {
       statusCode: 201,
 
       body: JSON.stringify({
-
-        message:
-          "Employee created successfully",
-
+        message: "Employee created successfully",
       }),
-
     };
-
   } catch (error) {
-
     console.error(error);
 
     return {
-
       statusCode: 500,
 
       body: JSON.stringify({
-
-        message:
-          "Internal Server Error",
-
+        message: "Internal Server Error",
       }),
-
     };
-
   }
-
 };
-
